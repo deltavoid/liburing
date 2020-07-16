@@ -14,6 +14,8 @@
 /examples/io_uring-test
 /examples/link-cp
 /examples/ucontext-cp
+/examples/infile1.txt
+/examples/outfile1.txt
 
 /test/232c93d07b74-test
 /test/35fa71a030ca-test
@@ -63,6 +65,7 @@
 /test/link_drain
 /test/madvise
 /test/nop
+/test/nop-all-sizes
 /test/open-close
 /test/openat2
 /test/personality

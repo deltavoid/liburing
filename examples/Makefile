@@ -21,3 +21,16 @@ test_objs := $(patsubst %.c,%.ol,$(test_srcs))
 
 clean:
 	@rm -f $(all_targets) $(test_objs)
+
+
+run_io_uring_test: io_uring-test
+	./$< infile1.txt
+
+run_io_uring_cp: io_uring-cp
+	./$< infile1.txt outfile1.txt
+
+run_link_cp: link-cp
+	./$< infile1.txt outfile1.txt
+
+run_ucontext_cp: ucontext-cp
+	./$< infile1.txt outfile1.txt
