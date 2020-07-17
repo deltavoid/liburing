@@ -135,7 +135,7 @@ static int copy_file(async_context *pctx, int infd, int outfd, struct iovec* pio
 	off_t offset = 0;
 
 	for (;;) {
-        LOG_DEBUG("copy_file: ---------------------------------------------------------\n");
+        // LOG_DEBUG("copy_file: ---------------------------------------------------------\n");
         LOG_DEBUG("copy_file: 2\n");
 		ssize_t bytes_read;
 
@@ -158,8 +158,9 @@ static int copy_file(async_context *pctx, int infd, int outfd, struct iovec* pio
 			return 0;
 		offset += bytes_read;
 
-		printf("%d->%d: wait %ds\n", infd, outfd, 1);
-		await_delay(pctx, 1);
+        int wait_s = 2;
+		printf("%d->%d: wait %ds\n", infd, outfd, wait_s);
+		await_delay(pctx, wait_s);
 	}
 
 	LOG_DEBUG("copy_file: 4\n");
@@ -177,6 +178,7 @@ static void copy_file_wrapper(arguments_bundle *pbundle)
 
 	int ret = copy_file(pctx, pbundle->infd, pbundle->outfd, &iov);
 
+    LOG_DEBUG("copy_file_wrapper: 2\n");
 	printf("%d->%d: done with ret code %d\n", pbundle->infd, pbundle->outfd, ret);
 
 	if (ret == 0) {
@@ -191,9 +193,12 @@ static void copy_file_wrapper(arguments_bundle *pbundle)
 	free(pbundle->pctx);
 	free(pbundle);
 
-    LOG_DEBUG("copy_file_wrapper: 2\n");
+	sleep(1);
+
+    LOG_DEBUG("copy_file_wrapper: 3\n");
+	// this is tricky, still using the memory which has been free.
 	swapcontext(&pctx->ctx_fnew, &pctx->ctx_main);
-	LOG_DEBUG("copy_file_wrapper: 3\n");
+	LOG_DEBUG("copy_file_wrapper: 4\n");
 }
 
 int main(int argc, char *argv[])
@@ -240,8 +245,8 @@ int main(int argc, char *argv[])
 		pbundle->psuccess = &success;
 		pbundle->pfailure = &failure;
 		pbundle->infd = infd;
-		// pbundle->outfd = outfd;
-		pbundle->outfd = 1;
+		pbundle->outfd = outfd;
+		// pbundle->outfd = 1;
 
 		makecontext(&pctx->ctx_fnew, (void (*)(void)) copy_file_wrapper, 1, pbundle);
 
@@ -251,8 +256,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
+    int cnt = 0;
 	/* event loop */
 	while (success + failure < req_count) {
+		LOG_DEBUG("main: -----------------------------------\n");
+		LOG_DEBUG("main: 3, cnt: %d\n", cnt++);
 		struct io_uring_cqe *cqe;
 
 		/* usually be timed waiting */
@@ -274,6 +282,8 @@ int main(int argc, char *argv[])
 			perror("swapcontext");
 			return 1;
 		}
+
+
 	}
 
 	io_uring_queue_exit(&ring);

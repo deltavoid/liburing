@@ -16,6 +16,10 @@
 /examples/ucontext-cp
 /examples/infile1.txt
 /examples/outfile1.txt
+/examples/infile2.txt
+/examples/outfile2.txt
+/examples/infile3.txt
+/examples/outfile2.txt
 
 /test/232c93d07b74-test
 /test/35fa71a030ca-test

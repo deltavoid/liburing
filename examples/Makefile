@@ -33,4 +33,4 @@ run_link_cp: link-cp
 	./$< infile1.txt outfile1.txt
 
 run_ucontext_cp: ucontext-cp
-	./$< infile1.txt outfile1.txt
+	./$<  infile1.txt outfile1.txt infile2.txt outfile2.txt
