@@ -19,8 +19,15 @@
 #include <sys/poll.h>
 #include "liburing.h"
 
+
+#define OUTPUT_FILE stdout
+#define LOG_DEBUG(format, args...) (fprintf(OUTPUT_FILE, \
+        "DEBUG 00:00:00.000000 %d %-24s %4d] " \
+		format , getpid(), __FILE__, __LINE__, ##args))
+
 #define QD	64
-#define BS	1024
+// #define BS	1024
+#define BS 1
 
 #ifndef SIGSTKSZ
 #define SIGSTKSZ 8192
@@ -124,9 +131,12 @@ static int setup_context(async_context *pctx, struct io_uring *ring)
 
 static int copy_file(async_context *pctx, int infd, int outfd, struct iovec* piov)
 {
+	LOG_DEBUG("copy_file: 1\n");
 	off_t offset = 0;
 
 	for (;;) {
+        LOG_DEBUG("copy_file: ---------------------------------------------------------\n");
+        LOG_DEBUG("copy_file: 2\n");
 		ssize_t bytes_read;
 
 		printf("%d->%d: readv %ld bytes from %ld\n", infd, outfd, (long) piov->iov_len, (long) offset);
@@ -151,10 +161,14 @@ static int copy_file(async_context *pctx, int infd, int outfd, struct iovec* pio
 		printf("%d->%d: wait %ds\n", infd, outfd, 1);
 		await_delay(pctx, 1);
 	}
+
+	LOG_DEBUG("copy_file: 4\n");
 }
 
 static void copy_file_wrapper(arguments_bundle *pbundle)
 {
+	LOG_DEBUG("copy_file_wrapper: 1\n");
+
 	struct iovec iov = {
 		.iov_base = malloc(BS),
 		.iov_len = BS,
@@ -177,7 +191,9 @@ static void copy_file_wrapper(arguments_bundle *pbundle)
 	free(pbundle->pctx);
 	free(pbundle);
 
+    LOG_DEBUG("copy_file_wrapper: 2\n");
 	swapcontext(&pctx->ctx_fnew, &pctx->ctx_main);
+	LOG_DEBUG("copy_file_wrapper: 3\n");
 }
 
 int main(int argc, char *argv[])
@@ -224,7 +240,8 @@ int main(int argc, char *argv[])
 		pbundle->psuccess = &success;
 		pbundle->pfailure = &failure;
 		pbundle->infd = infd;
-		pbundle->outfd = outfd;
+		// pbundle->outfd = outfd;
+		pbundle->outfd = 1;
 
 		makecontext(&pctx->ctx_fnew, (void (*)(void)) copy_file_wrapper, 1, pbundle);
 
