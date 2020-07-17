@@ -20,6 +20,14 @@
 #include "liburing.h"
 
 
+#ifdef __GNUC__
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+#else
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+#endif
+
 #define OUTPUT_FILE stdout
 #define LOG_DEBUG(format, args...) (fprintf(OUTPUT_FILE, \
         "DEBUG 00:00:00.000000 %d %-24s %4d] " \
@@ -37,6 +45,7 @@ typedef struct {
 	struct io_uring *ring;
 	unsigned char stack_buf[SIGSTKSZ];
 	ucontext_t ctx_main, ctx_fnew;
+	int exited;
 } async_context;
 
 typedef struct {
@@ -126,6 +135,8 @@ static int setup_context(async_context *pctx, struct io_uring *ring)
 	pctx->ctx_fnew.uc_stack.ss_size = sizeof(pctx->stack_buf);
 	pctx->ctx_fnew.uc_link = &pctx->ctx_main;
 
+	pctx->exited = 0;
+
 	return 0;
 }
 
@@ -190,13 +201,11 @@ static void copy_file_wrapper(arguments_bundle *pbundle)
 	free(iov.iov_base);
 	close(pbundle->infd);
 	close(pbundle->outfd);
-	free(pbundle->pctx);
+	// free(pbundle->pctx);
+	pctx->exited = 1;
 	free(pbundle);
 
-	sleep(1);
-
     LOG_DEBUG("copy_file_wrapper: 3\n");
-	// this is tricky, still using the memory which has been free.
 	swapcontext(&pctx->ctx_fnew, &pctx->ctx_main);
 	LOG_DEBUG("copy_file_wrapper: 4\n");
 }
@@ -283,6 +292,11 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 
+		if  (unlikely(pctx->exited))
+		{
+			printf("context %p exited!\n", pctx);
+			free(pctx);
+		}
 
 	}
 
