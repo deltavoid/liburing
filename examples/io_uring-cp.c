@@ -15,8 +15,15 @@
 #include <sys/ioctl.h>
 #include "liburing.h"
 
-#define QD	64
-#define BS	(32*1024)
+#define OUTPUT_FILE stdout
+#define LOG_DEBUG(format, args...) (fprintf(OUTPUT_FILE, \
+        "DEBUG 00:00:00.000000 %d %-24s %4d] " \
+		format , getpid(), __FILE__, __LINE__, ##args))
+
+
+#define QD	4
+// #define BS	(32*1024)
+#define BS  1
 
 static int infd, outfd;
 
@@ -42,6 +49,7 @@ static int setup_context(unsigned entries, struct io_uring *ring)
 
 static int get_file_size(int fd, off_t *size)
 {
+	// LOG_DEBUG("get_file_size: 1\n");
 	struct stat st;
 
 	if (fstat(fd, &st) < 0)
@@ -59,11 +67,13 @@ static int get_file_size(int fd, off_t *size)
 		return 0;
 	}
 
+    // LOG_DEBUG("get_file_size: 2\n");
 	return -1;
 }
 
 static void queue_prepped(struct io_uring *ring, struct io_data *data)
 {
+	LOG_DEBUG("queue_prepped: 1\n");
 	struct io_uring_sqe *sqe;
 
 	sqe = io_uring_get_sqe(ring);
@@ -75,20 +85,28 @@ static void queue_prepped(struct io_uring *ring, struct io_data *data)
 		io_uring_prep_writev(sqe, outfd, &data->iov, 1, data->offset);
 
 	io_uring_sqe_set_data(sqe, data);
+
+	LOG_DEBUG("queue_prepped: 2\n");
 }
 
 static int queue_read(struct io_uring *ring, off_t size, off_t offset)
 {
+	LOG_DEBUG("queue_read: 1\n");
 	struct io_uring_sqe *sqe;
 	struct io_data *data;
 
 	data = malloc(size + sizeof(*data));
 	if (!data)
+	{
+		LOG_DEBUG("queue_read: 2\n");
 		return 1;
+	}
+		
 
 	sqe = io_uring_get_sqe(ring);
 	if (!sqe) {
 		free(data);
+		LOG_DEBUG("queue_read: 3\n");
 		return 1;
 	}
 
@@ -101,11 +119,14 @@ static int queue_read(struct io_uring *ring, off_t size, off_t offset)
 
 	io_uring_prep_readv(sqe, infd, &data->iov, 1, offset);
 	io_uring_sqe_set_data(sqe, data);
+
+	LOG_DEBUG("queue_read: 4\n");
 	return 0;
 }
 
 static void queue_write(struct io_uring *ring, struct io_data *data)
 {
+	LOG_DEBUG("queue_write: 1\n");
 	data->read = 0;
 	data->offset = data->first_offset;
 
@@ -114,10 +135,12 @@ static void queue_write(struct io_uring *ring, struct io_data *data)
 
 	queue_prepped(ring, data);
 	io_uring_submit(ring);
+	LOG_DEBUG("queue_write: 2\n");
 }
 
 static int copy_file(struct io_uring *ring, off_t insize)
 {
+	LOG_DEBUG("copy_file: 1\n");
 	unsigned long reads, writes;
 	struct io_uring_cqe *cqe;
 	off_t write_left, offset;
@@ -127,6 +150,9 @@ static int copy_file(struct io_uring *ring, off_t insize)
 	writes = reads = offset = 0;
 
 	while (insize || write_left) {
+		fprintf(OUTPUT_FILE, "\n");
+		LOG_DEBUG("copy_file: ---------------------------------------------------\n");
+		LOG_DEBUG("copy_file: 2\n");
 		int had_reads, got_comp;
 	
 		/*
@@ -134,6 +160,7 @@ static int copy_file(struct io_uring *ring, off_t insize)
 		 */
 		had_reads = reads;
 		while (insize) {
+			LOG_DEBUG("copy_file: 3\n");
 			off_t this_size = insize;
 
 			if (reads + writes >= QD)
@@ -159,11 +186,17 @@ static int copy_file(struct io_uring *ring, off_t insize)
 			}
 		}
 
+        // printf("\n");
+        LOG_DEBUG("copy_file: 4\n");
+		
+		
+
 		/*
 		 * Queue is full at this point. Find at least one completion.
 		 */
 		got_comp = 0;
 		while (write_left) {
+			LOG_DEBUG("copy_file: 5\n");
 			struct io_data *data;
 
 			if (!got_comp) {
@@ -184,8 +217,10 @@ static int copy_file(struct io_uring *ring, off_t insize)
 			if (!cqe)
 				break;
 
+            LOG_DEBUG("copy_file: 6\n");
 			data = io_uring_cqe_get_data(cqe);
 			if (cqe->res < 0) {
+				LOG_DEBUG("copy_file: 6.1\n");
 				if (cqe->res == -EAGAIN) {
 					queue_prepped(ring, data);
 					io_uring_cqe_seen(ring, cqe);
@@ -195,6 +230,7 @@ static int copy_file(struct io_uring *ring, off_t insize)
 						strerror(-cqe->res));
 				return 1;
 			} else if (cqe->res != data->iov.iov_len) {
+				LOG_DEBUG("copy_file: 6.2\n");
 				/* Short read/write, adjust and requeue */
 				data->iov.iov_base += cqe->res;
 				data->iov.iov_len -= cqe->res;
@@ -208,19 +244,25 @@ static int copy_file(struct io_uring *ring, off_t insize)
 			 * All done. if write, nothing else to do. if read,
 			 * queue up corresponding write.
 			 */
+			LOG_DEBUG("copy_file: 7\n");
 			if (data->read) {
+				LOG_DEBUG("copy_file: 7.1\n");
 				queue_write(ring, data);
 				write_left -= data->first_len;
 				reads--;
 				writes++;
 			} else {
+				LOG_DEBUG("copy_file: 7.2\n");
 				free(data);
 				writes--;
 			}
 			io_uring_cqe_seen(ring, cqe);
 		}
+
+		sleep(1);
 	}
 
+    LOG_DEBUG("copy_file: 8\n");
 	return 0;
 }
 
@@ -240,11 +282,12 @@ int main(int argc, char *argv[])
 		perror("open infile");
 		return 1;
 	}
-	outfd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (outfd < 0) {
-		perror("open outfile");
-		return 1;
-	}
+	// outfd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	// if (outfd < 0) {
+	// 	perror("open outfile");
+	// 	return 1;
+	// }
+	outfd = 1;
 
 	if (setup_context(QD, &ring))
 		return 1;

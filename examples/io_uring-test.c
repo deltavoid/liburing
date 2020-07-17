@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
 		i++;
 	} while (1);
 
+    // printf("call io_uring_submit\n");
 	ret = io_uring_submit(&ring);
 	if (ret < 0) {
 		fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
